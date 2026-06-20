@@ -1,0 +1,175 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #f5f7fa;
+}
+
+.page-container {
+  padding: 24px;
+}
+
+.page-header {
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.stat-card {
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.stat-card .label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.stat-card .value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.stat-card .trend {
+  font-size: 12px;
+  margin-top: 6px;
+  color: #10b981;
+}
+
+.tag-idle {
+  background: #dcfce7;
+  color: #166534;
+  border: none;
+}
+
+.tag-busy {
+  background: #fee2e2;
+  color: #991b1b;
+  border: none;
+}
+
+.tag-maintenance {
+  background: #fef3c7;
+  color: #92400e;
+  border: none;
+}
+
+.tag-offline {
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+}
+
+.tag-pending {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: none;
+}
+
+.tag-allocated {
+  background: #cffafe;
+  color: #155e75;
+  border: none;
+}
+
+.tag-in_progress {
+  background: #fef3c7;
+  color: #92400e;
+  border: none;
+}
+
+.tag-completed {
+  background: #dcfce7;
+  color: #166534;
+  border: none;
+}
+
+.tag-cancelled {
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.info-item .label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.info-item .value {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.bill-preview {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.bill-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.bill-row.total {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 8px;
+  padding-top: 12px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.bill-row .label {
+  color: #6b7280;
+}
+
+.bill-row .value {
+  color: #1f2937;
+}
+
+.bill-row.total .value {
+  color: #dc2626;
+}

@@ -1,0 +1,50 @@
+{
+  "name": "rehab-robot-trainer",
+  "version": "1.0.0",
+  "description": "康复机器人训练桌面客户端 - 训练排期、自动分配、计费规则、账单生成",
+  "main": "dist-electron/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && electron-builder",
+    "preview": "vite preview",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dayjs": "^1.11.13",
+    "antd": "^5.21.0",
+    "@ant-design/icons": "^5.5.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.4",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^32.1.2",
+    "electron-builder": "^25.0.5",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.rehab.robot.trainer",
+    "productName": "康复机器人训练系统",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
