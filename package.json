@@ -2,13 +2,14 @@
   "name": "rehab-robot-trainer",
   "version": "1.0.0",
   "description": "康复机器人训练桌面客户端 - 训练排期、自动分配、计费规则、账单生成",
-  "main": "dist-electron/main/index.js",
+  "main": "dist-electron/main.js",
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && electron-builder",
+    "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "start": "electron ."
+    "start": "npm run build && electron .",
+    "start:now": "electron ."
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",

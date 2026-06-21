@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 import type {
   TrainingSchedule, ScheduleCreate, ScheduleQuery, ScheduleStatus, Bill
 } from '../../src/types'
-import { allocateRobot } from './allocation'
+import { allocateRobot, getRobotDailyScheduledMinutes } from './allocation'
 import { getBillingRule, calculateBilling, validateBillAmounts } from './billing'
 
 function generateRobotName(db: Database.Database, robotId: number): string {
@@ -83,6 +83,16 @@ export function createSchedule(
       startTime, endTime, data.durationMinutes, robotId,
       data.insuranceId || null, data.remark || null
     )
+
+    const queryDay = dayjs(startTime).format('YYYY-MM-DD')
+    const scheduledTotal = getRobotDailyScheduledMinutes(db, robotId, queryDay)
+    db.prepare(`
+      UPDATE robots
+      SET status = CASE WHEN status = 'idle' THEN 'busy' ELSE status END,
+          dailyUsageMinutes = ?,
+          updatedAt = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(scheduledTotal, robotId)
 
     return db.prepare(`
       SELECT s.*, r.name as robotName
@@ -168,12 +178,82 @@ export function cancelSchedule(db: Database.Database, id: number): void {
   const existing = db.prepare('SELECT * FROM training_schedules WHERE id = ?').get(id) as TrainingSchedule | undefined
   if (!existing) throw new Error('排期不存在')
   if (existing.status === 'completed') throw new Error('已完成的排期无法取消')
+  if (existing.status === 'in_progress') throw new Error('训练中的排期请先结束训练再取消')
 
   db.prepare(`
     UPDATE training_schedules
     SET status = 'cancelled', updatedAt = datetime('now', 'localtime')
     WHERE id = ?
   `).run(id)
+
+  if (existing.robotId) {
+    const queryDay = dayjs(existing.startTime).format('YYYY-MM-DD')
+    const remaining = db.prepare(`
+      SELECT COUNT(*) as cnt FROM training_schedules
+      WHERE robotId = ? AND status IN ('allocated', 'in_progress', 'pending') AND id != ?
+        AND DATE(startTime) = ?
+    `).get(existing.robotId, id, queryDay) as { cnt: number }
+
+    const scheduledTotal = getRobotDailyScheduledMinutes(db, existing.robotId, queryDay)
+    if (remaining.cnt === 0) {
+      db.prepare(`
+        UPDATE robots SET status = 'idle', dailyUsageMinutes = ?, updatedAt = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(scheduledTotal, existing.robotId)
+    } else {
+      db.prepare(`
+        UPDATE robots SET dailyUsageMinutes = ?, updatedAt = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(scheduledTotal, existing.robotId)
+    }
+  }
+}
+
+export function startSchedule(db: Database.Database, id: number): TrainingSchedule {
+  const existing = db.prepare(`
+    SELECT s.*, r.name as robotName
+    FROM training_schedules s
+    LEFT JOIN robots r ON s.robotId = r.id
+    WHERE s.id = ?
+  `).get(id) as (TrainingSchedule & { robotName?: string }) | undefined
+
+  if (!existing) throw new Error('排期不存在')
+  if (!existing.robotId) throw new Error('该排期未分配机器人')
+  if (existing.status === 'completed') throw new Error('该排期已完成')
+  if (existing.status === 'cancelled') throw new Error('该排期已取消')
+  if (existing.status === 'in_progress') throw new Error('该排期已在训练中')
+
+  const now = dayjs()
+  const scheduledStart = dayjs(existing.startTime)
+  const diffMinutes = now.diff(scheduledStart, 'minute')
+
+  if (diffMinutes < -15) {
+    throw new Error(`距训练开始还有 ${Math.abs(diffMinutes)} 分钟，暂不能提前开始`)
+  }
+
+  const actualStartTime = now.format('YYYY-MM-DD HH:mm:ss')
+
+  db.prepare(`
+    UPDATE training_schedules
+    SET status = 'in_progress',
+        actualStartTime = ?,
+        updatedAt = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(actualStartTime, id)
+
+  db.prepare(`
+    UPDATE robots
+    SET status = 'busy',
+        updatedAt = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(existing.robotId)
+
+  return db.prepare(`
+    SELECT s.*, r.name as robotName
+    FROM training_schedules s
+    LEFT JOIN robots r ON s.robotId = r.id
+    WHERE s.id = ?
+  `).get(id) as TrainingSchedule
 }
 
 export function completeSchedule(db: Database.Database, id: number): Bill {
@@ -189,11 +269,17 @@ export function completeSchedule(db: Database.Database, id: number): Bill {
   if (existing.status === 'completed') throw new Error('该排期已完成')
   if (existing.status === 'cancelled') throw new Error('该排期已取消')
 
-  const actualStartTime = existing.actualStartTime || existing.startTime
+  if (existing.status !== 'in_progress') {
+    throw new Error('请先点击「开始训练」再点击结束')
+  }
+
+  if (!existing.actualStartTime) {
+    throw new Error('训练开始时间丢失，请联系管理员')
+  }
+
   const actualEndTime = dayjs().format('YYYY-MM-DD HH:mm:ss')
-  const actualDuration = Math.max(1, Math.round(
-    dayjs(actualEndTime).diff(dayjs(actualStartTime), 'minute')
-  ))
+  const rawDuration = dayjs(actualEndTime).diff(dayjs(existing.actualStartTime), 'minute')
+  const actualDuration = Math.max(1, rawDuration)
 
   const rule = getBillingRule(db)
   let insurance: import('../../src/types').InsuranceItem | null = null
@@ -221,7 +307,7 @@ export function completeSchedule(db: Database.Database, id: number): Bill {
           actualDurationMinutes = ?,
           updatedAt = datetime('now', 'localtime')
       WHERE id = ?
-    `).run(actualStartTime, actualEndTime, actualDuration, id)
+    `).run(existing.actualStartTime, actualEndTime, actualDuration, id)
 
     const billStmt = db.prepare(`
       INSERT INTO bills
@@ -258,6 +344,16 @@ export function completeSchedule(db: Database.Database, id: number): Bill {
         UPDATE bills SET verifiedAt = datetime('now', 'localtime') WHERE id = ?
       `).run(billResult.lastInsertRowid)
       bill.verifiedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    }
+
+    const remaining = db.prepare(`
+      SELECT COUNT(*) as cnt FROM training_schedules
+      WHERE robotId = ? AND status IN ('allocated', 'in_progress', 'pending') AND id != ?
+    `).get(existing.robotId, id) as { cnt: number }
+    if (remaining.cnt === 0) {
+      db.prepare(`
+        UPDATE robots SET status = 'idle', updatedAt = datetime('now', 'localtime') WHERE id = ?
+      `).run(existing.robotId)
     }
 
     return bill

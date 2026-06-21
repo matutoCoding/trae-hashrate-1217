@@ -5,7 +5,7 @@ import {
 } from './services/robot'
 import {
   listSchedules, createSchedule, updateSchedule, cancelSchedule,
-  completeSchedule, getScheduleStats
+  completeSchedule, startSchedule, getScheduleStats
 } from './services/schedule'
 import {
   listBills, getBillById, verifyInsurance, getBillStats
@@ -35,6 +35,7 @@ export function registerIpcHandlers(db: Database.Database) {
   ipcMain.handle('schedule:create', (_e, data) => safeCall(() => createSchedule(db, data)))
   ipcMain.handle('schedule:update', (_e, id, data) => safeCall(() => updateSchedule(db, id, data)))
   ipcMain.handle('schedule:cancel', (_e, id) => safeCall(() => cancelSchedule(db, id)))
+  ipcMain.handle('schedule:start', (_e, id) => safeCall(() => startSchedule(db, id)))
   ipcMain.handle('schedule:complete', (_e, id) => safeCall(() => completeSchedule(db, id)))
   ipcMain.handle('schedule:checkAvailable', (_e, startTime, durationMinutes) =>
     safeCall(() => allocateRobot(db, { startTime, durationMinutes }))

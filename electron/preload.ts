@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   createSchedule: (data: ScheduleCreate): Promise<TrainingSchedule> => ipcRenderer.invoke('schedule:create', data),
   updateSchedule: (id: number, data: Partial<ScheduleCreate>): Promise<TrainingSchedule> => ipcRenderer.invoke('schedule:update', id, data),
   cancelSchedule: (id: number): Promise<void> => ipcRenderer.invoke('schedule:cancel', id),
+  startSchedule: (id: number): Promise<TrainingSchedule> => ipcRenderer.invoke('schedule:start', id),
   completeSchedule: (id: number): Promise<Bill> => ipcRenderer.invoke('schedule:complete', id),
   checkAvailable: (startTime: string, durationMinutes: number): Promise<AllocationResult> =>
     ipcRenderer.invoke('schedule:checkAvailable', startTime, durationMinutes),

@@ -45,21 +45,32 @@ export default function Billing() {
     const cases: number[] = [15, 30, 60, 90, 120, 150, 180]
     const results = cases.map(d => {
       let isBaseApplied = d <= r.baseMinutes
-      let isCapped = d > r.maxMinutes
       let actualDuration = d
       if (d <= r.baseMinutes) actualDuration = r.baseMinutes
-      if (d > r.maxMinutes) actualDuration = r.maxMinutes
 
       let extraMinutes = Math.max(0, d - r.baseMinutes)
       let raw = r.basePrice + extraMinutes * r.unitPricePerMinute
 
-      if (d <= r.baseMinutes) raw = r.basePrice
-      if (d > r.maxMinutes) raw = r.maxPrice
+      if (d <= r.baseMinutes) {
+        raw = r.basePrice
+      }
+
+      let isCapped = false
+      if (raw >= r.maxPrice) {
+        raw = r.maxPrice
+        isCapped = true
+        if (d > r.maxMinutes) {
+          actualDuration = r.maxMinutes
+        }
+      }
+
+      const extraPrice = Math.max(0, Math.round((raw - r.basePrice) * 100) / 100)
+      raw = Math.round(raw * 100) / 100
 
       return {
         duration: d,
         basePrice: r.basePrice,
-        extraPrice: Math.max(0, raw - r.basePrice),
+        extraPrice,
         rawAmount: raw,
         finalAmount: raw,
         isBaseApplied,

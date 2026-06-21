@@ -12,6 +12,7 @@ interface Window {
     createSchedule: (data: import('./types').ScheduleCreate) => Promise<import('./types').TrainingSchedule>
     updateSchedule: (id: number, data: Partial<import('./types').ScheduleCreate>) => Promise<import('./types').TrainingSchedule>
     cancelSchedule: (id: number) => Promise<void>
+    startSchedule: (id: number) => Promise<import('./types').TrainingSchedule>
     completeSchedule: (id: number) => Promise<import('./types').Bill>
     checkAvailable: (startTime: string, durationMinutes: number) => Promise<import('./types').AllocationResult>
     getScheduleStats: () => Promise<any>

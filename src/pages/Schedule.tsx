@@ -113,10 +113,20 @@ export default function SchedulePage() {
     }
   }
 
+  const handleStart = async (s: TrainingSchedule) => {
+    try {
+      await window.api.startSchedule(s.id)
+      message.success('训练已开始')
+      loadData()
+    } catch (err: any) {
+      message.error(err.message || '开始失败')
+    }
+  }
+
   const handleComplete = async (s: TrainingSchedule) => {
     modal.confirm({
-      title: '确认完成训练？',
-      content: `患者：${s.patientName}\n完成后将自动生成账单`,
+      title: '确认结束训练并生成账单？',
+      content: `患者：${s.patientName}${s.actualStartTime ? `\n已开始于：${dayjs(s.actualStartTime).format('YYYY-MM-DD HH:mm')}` : ''}`,
       onOk: async () => {
         try {
           const bill = await window.api.completeSchedule(s.id)
@@ -126,7 +136,7 @@ export default function SchedulePage() {
           message.error(err.message || '操作失败')
         }
       },
-      okText: '确认完成',
+      okText: '确认结束',
       cancelText: '取消',
     })
   }
@@ -246,47 +256,55 @@ export default function SchedulePage() {
       fixed: 'right' as const,
       width: 240,
       render: (_: any, s: TrainingSchedule) => (
-        <Space size="small">
-          {s.status === 'allocated' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<PlayCircleOutlined />}
-              onClick={() => handleComplete(s)}
-            >
-              开始/完成
-            </Button>
-          )}
-          {s.status === 'in_progress' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleComplete(s)}
-            >
-              结束
-            </Button>
-          )}
-          {!['completed', 'cancelled'].includes(s.status) && (
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEdit(s)}
-            >
-              编辑
-            </Button>
-          )}
-          {!['completed', 'cancelled'].includes(s.status) && (
-            <Popconfirm
-              title="取消该排期？"
-              onConfirm={() => handleCancel(s.id)}
-              okText="确定"
-              cancelText="取消"
-            >
-              <Button type="link" size="small" danger icon={<CloseCircleOutlined />}>取消</Button>
-            </Popconfirm>
-          )}
+        <Space size="small" direction="vertical" style={{ width: '100%' }}>
+          <Space size="small" wrap>
+            {s.status === 'allocated' && (
+              <Button
+                type="link"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                onClick={() => handleStart(s)}
+              >
+                开始训练
+              </Button>
+            )}
+            {s.status === 'in_progress' && (
+              <>
+                <span style={{ fontSize: 11, color: '#92400e' }}>
+                  开始于 {dayjs(s.actualStartTime).format('HH:mm')}
+                </span>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleComplete(s)}
+                >
+                  结束
+                </Button>
+              </>
+            )}
+            {!['completed', 'cancelled', 'in_progress'].includes(s.status) && (
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openEdit(s)}
+              >
+                编辑
+              </Button>
+            )}
+            {!['completed', 'cancelled', 'in_progress'].includes(s.status) && (
+              <Popconfirm
+                title="取消该排期？"
+                onConfirm={() => handleCancel(s.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}>取消</Button>
+              </Popconfirm>
+            )}
+          </Space>
         </Space>
       ),
     },

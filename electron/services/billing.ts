@@ -58,28 +58,27 @@ export function calculateBilling(ctx: BillingContext): BillingCalculation {
   let isCapped = false
   let isBaseApplied = false
 
-  if (durationMinutes <= rule.baseMinutes) {
-    actualBilledMinutes = rule.baseMinutes
-    isBaseApplied = true
-  }
-
   const basePrice = rule.basePrice
   let extraMinutes = Math.max(0, durationMinutes - rule.baseMinutes)
   let extraPrice = extraMinutes * rule.unitPricePerMinute
   let rawAmount = basePrice + extraPrice
 
-  if (durationMinutes > rule.maxMinutes) {
-    rawAmount = rule.maxPrice
-    actualBilledMinutes = rule.maxMinutes
-    isCapped = true
-    extraMinutes = rule.maxMinutes - rule.baseMinutes
-    extraPrice = rule.maxPrice - rule.basePrice
-  }
-
   if (durationMinutes <= rule.baseMinutes) {
+    actualBilledMinutes = rule.baseMinutes
+    isBaseApplied = true
     rawAmount = rule.basePrice
     extraPrice = 0
     extraMinutes = 0
+  }
+
+  if (rawAmount >= rule.maxPrice) {
+    rawAmount = rule.maxPrice
+    isCapped = true
+    extraMinutes = Math.max(0, actualBilledMinutes - rule.baseMinutes)
+    extraPrice = rule.maxPrice - rule.basePrice
+    if (durationMinutes > rule.maxMinutes) {
+      actualBilledMinutes = rule.maxMinutes
+    }
   }
 
   rawAmount = Math.round(rawAmount * 100) / 100
@@ -96,33 +95,30 @@ export function calculateBilling(ctx: BillingContext): BillingCalculation {
     insuranceDeductedAmount = Math.round(insuranceDeductedAmount * 100) / 100
   }
 
-  const finalAmount = isCapped
-    ? rule.maxPrice
-    : (isBaseApplied ? rule.basePrice : basePrice + extraPrice)
-
-  const patientPayableAmount = Math.round(Math.max(0, rawAmount - insuranceDeductedAmount) * 100) / 100
-
-  const adjustedFinal = Math.round(Math.max(0, finalAmount - insuranceDeductedAmount) * 100) / 100
+  const cappedFinal = Math.min(rawAmount, rule.maxPrice)
+  const patientPayableAmount = Math.round(Math.max(0, cappedFinal - insuranceDeductedAmount) * 100) / 100
 
   return {
     basePrice: Math.round(basePrice * 100) / 100,
     extraPrice,
-    rawAmount,
-    finalAmount: adjustedFinal,
+    rawAmount: Math.round(cappedFinal * 100) / 100,
+    finalAmount: patientPayableAmount,
     isCapped,
     isBaseApplied,
     insuranceDiscountRate,
     insuranceDeductedAmount,
-    patientPayableAmount: adjustedFinal,
+    patientPayableAmount,
     actualBilledMinutes,
   }
 }
 
 export function validateBillAmounts(calc: BillingCalculation, rule: BillingRule): boolean {
-  if (calc.finalAmount < 0) return false
+  if (calc.finalAmount < -0.01) return false
   if (calc.rawAmount > rule.maxPrice + 0.01) return false
-  if (!calc.isCapped && calc.rawAmount < rule.basePrice - 0.01) return false
+  if (calc.rawAmount < -0.01) return false
   if (calc.insuranceDeductedAmount > calc.rawAmount + 0.01) return false
-  if (calc.patientPayableAmount < 0) return false
+  if (calc.patientPayableAmount < -0.01) return false
+  if (calc.extraPrice < -0.01) return false
+  if (calc.basePrice < -0.01) return false
   return true
 }

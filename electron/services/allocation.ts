@@ -80,6 +80,21 @@ export function countSlotFragmentation(
   return fragmentation
 }
 
+export function getRobotDailyScheduledMinutes(
+  db: Database.Database,
+  robotId: number,
+  queryDate: string
+): number {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(durationMinutes), 0) as total
+    FROM training_schedules
+    WHERE robotId = ?
+      AND DATE(startTime) = ?
+      AND status IN ('pending', 'allocated', 'in_progress', 'completed')
+  `).get(robotId, queryDate) as { total: number }
+  return row.total || 0
+}
+
 export function allocateRobot(
   db: Database.Database,
   ctx: AllocationContext
@@ -97,13 +112,13 @@ export function allocateRobot(
 
   const candidateRobots = db.prepare(`
     SELECT * FROM robots
-    WHERE status = 'idle'
+    WHERE status IN ('idle', 'busy')
     ${ctx.type ? "AND type = ?" : ''}
-    ORDER BY priorityScore DESC, dailyUsageMinutes ASC, totalUsageMinutes ASC
+    ORDER BY priorityScore DESC
   `).all(...(ctx.type ? [ctx.type] : [])) as Robot[]
 
   if (candidateRobots.length === 0) {
-    return { success: false, reason: '当前时段没有可用的空闲康复机器人' }
+    return { success: false, reason: '当前时段没有可用的康复机器人' }
   }
 
   const excludeIds = ctx.excludeRobotIds || []
@@ -142,13 +157,16 @@ export function allocateRobot(
       const fragAfter = countSlotFragmentation(afterFree)
       const fragIncrease = fragAfter - fragBefore
 
-      const loadScore = robot.dailyUsageMinutes
-      const balanceScore = Math.abs(loadScore - (loadScore + durationMinutes) / 2)
+      const scheduledToday = getRobotDailyScheduledMinutes(db, robot.id, queryDay)
+      const effectiveLoadMinutes = Math.max(robot.dailyUsageMinutes, scheduledToday)
+      const balancePenalty = effectiveLoadMinutes * 3
+
       const priorityWeight = robot.priorityScore * 100
+      const totalScore = priorityWeight - fragIncrease * 2 - balancePenalty
 
       ;(robot as any)['_fragScore'] = fragIncrease
-      ;(robot as any)['_loadScore'] = loadScore
-      ;(robot as any)['_totalScore'] = priorityWeight - fragIncrease * 2 - balanceScore
+      ;(robot as any)['_loadScore'] = effectiveLoadMinutes
+      ;(robot as any)['_totalScore'] = totalScore
 
       availableRobots.push(robot)
     } else {
