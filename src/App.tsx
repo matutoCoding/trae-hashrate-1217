@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from 'antd'
 import AppLayout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -10,7 +10,7 @@ import Insurance from './pages/Insurance'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Layout style={{ minHeight: '100vh' }}>
         <Routes>
           <Route path="/" element={<AppLayout />}>
@@ -23,6 +23,6 @@ export default function App() {
           </Route>
         </Routes>
       </Layout>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
