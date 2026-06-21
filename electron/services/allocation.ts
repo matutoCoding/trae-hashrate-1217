@@ -90,9 +90,47 @@ export function getRobotDailyScheduledMinutes(
     FROM training_schedules
     WHERE robotId = ?
       AND DATE(startTime) = ?
-      AND status IN ('pending', 'allocated', 'in_progress', 'completed')
+      AND status IN ('pending', 'allocated', 'in_progress')
   `).get(robotId, queryDate) as { total: number }
   return row.total || 0
+}
+
+export interface RobotDailyLoad {
+  plannedMinutes: number
+  completedMinutes: number
+  totalLoadMinutes: number
+  unfinishedCount: number
+  completedCount: number
+}
+
+export function getRobotDailyLoad(
+  db: Database.Database,
+  robotId: number,
+  queryDate: string
+): RobotDailyLoad {
+  const unfinishedRow = db.prepare(`
+    SELECT COALESCE(SUM(durationMinutes), 0) as total, COUNT(*) as cnt
+    FROM training_schedules
+    WHERE robotId = ?
+      AND DATE(startTime) = ?
+      AND status IN ('pending', 'allocated', 'in_progress')
+  `).get(robotId, queryDate) as { total: number; cnt: number }
+
+  const completedRow = db.prepare(`
+    SELECT COALESCE(SUM(COALESCE(actualDurationMinutes, durationMinutes)), 0) as total, COUNT(*) as cnt
+    FROM training_schedules
+    WHERE robotId = ?
+      AND DATE(startTime) = ?
+      AND status = 'completed'
+  `).get(robotId, queryDate) as { total: number; cnt: number }
+
+  return {
+    plannedMinutes: unfinishedRow.total || 0,
+    completedMinutes: completedRow.total || 0,
+    totalLoadMinutes: (unfinishedRow.total || 0) + (completedRow.total || 0),
+    unfinishedCount: unfinishedRow.cnt || 0,
+    completedCount: completedRow.cnt || 0,
+  }
 }
 
 export function allocateRobot(
@@ -157,15 +195,16 @@ export function allocateRobot(
       const fragAfter = countSlotFragmentation(afterFree)
       const fragIncrease = fragAfter - fragBefore
 
-      const scheduledToday = getRobotDailyScheduledMinutes(db, robot.id, queryDay)
-      const effectiveLoadMinutes = Math.max(robot.dailyUsageMinutes, scheduledToday)
-      const balancePenalty = effectiveLoadMinutes * 3
+      const dailyLoad = getRobotDailyLoad(db, robot.id, queryDay)
+      const balancePenalty = dailyLoad.totalLoadMinutes * 3
 
       const priorityWeight = robot.priorityScore * 100
       const totalScore = priorityWeight - fragIncrease * 2 - balancePenalty
 
       ;(robot as any)['_fragScore'] = fragIncrease
-      ;(robot as any)['_loadScore'] = effectiveLoadMinutes
+      ;(robot as any)['_loadScore'] = dailyLoad.totalLoadMinutes
+      ;(robot as any)['_plannedMinutes'] = dailyLoad.plannedMinutes
+      ;(robot as any)['_completedMinutes'] = dailyLoad.completedMinutes
       ;(robot as any)['_totalScore'] = totalScore
 
       availableRobots.push(robot)
@@ -183,5 +222,16 @@ export function allocateRobot(
   }
 
   availableRobots.sort((a, b) => (b as any)['_totalScore'] - (a as any)['_totalScore'])
-  return { success: true, robot: availableRobots[0] }
+  const best = availableRobots[0]
+  return {
+    success: true,
+    robot: best,
+    detail: {
+      plannedMinutes: (best as any)['_plannedMinutes'],
+      completedMinutes: (best as any)['_completedMinutes'],
+      totalLoadMinutes: (best as any)['_loadScore'],
+      fragmentationScore: (best as any)['_fragScore'],
+      totalScore: (best as any)['_totalScore'],
+    },
+  }
 }

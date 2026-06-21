@@ -3,12 +3,28 @@ import dayjs from 'dayjs'
 import type {
   TrainingSchedule, ScheduleCreate, ScheduleQuery, ScheduleStatus, Bill
 } from '../../src/types'
-import { allocateRobot, getRobotDailyScheduledMinutes } from './allocation'
+import { allocateRobot, getRobotDailyScheduledMinutes, getRobotDailyLoad } from './allocation'
 import { getBillingRule, calculateBilling, validateBillAmounts } from './billing'
 
 function generateRobotName(db: Database.Database, robotId: number): string {
   const r = db.prepare('SELECT name FROM robots WHERE id = ?').get(robotId) as { name: string } | undefined
   return r?.name || ''
+}
+
+function syncRobotDailyLoad(db: Database.Database, robotId: number, queryDate: string): void {
+  const load = getRobotDailyLoad(db, robotId, queryDate)
+  const hasUnfinished = load.unfinishedCount > 0
+  db.prepare(`
+    UPDATE robots
+    SET status = CASE
+      WHEN status IN ('maintenance', 'offline') THEN status
+      WHEN ? = 1 THEN 'busy'
+      ELSE 'idle'
+    END,
+      dailyUsageMinutes = ?,
+      updatedAt = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(hasUnfinished ? 1 : 0, load.totalLoadMinutes, robotId)
 }
 
 export function listSchedules(
@@ -85,14 +101,7 @@ export function createSchedule(
     )
 
     const queryDay = dayjs(startTime).format('YYYY-MM-DD')
-    const scheduledTotal = getRobotDailyScheduledMinutes(db, robotId, queryDay)
-    db.prepare(`
-      UPDATE robots
-      SET status = CASE WHEN status = 'idle' THEN 'busy' ELSE status END,
-          dailyUsageMinutes = ?,
-          updatedAt = datetime('now', 'localtime')
-      WHERE id = ?
-    `).run(scheduledTotal, robotId)
+    syncRobotDailyLoad(db, robotId, queryDay)
 
     return db.prepare(`
       SELECT s.*, r.name as robotName
@@ -188,24 +197,7 @@ export function cancelSchedule(db: Database.Database, id: number): void {
 
   if (existing.robotId) {
     const queryDay = dayjs(existing.startTime).format('YYYY-MM-DD')
-    const remaining = db.prepare(`
-      SELECT COUNT(*) as cnt FROM training_schedules
-      WHERE robotId = ? AND status IN ('allocated', 'in_progress', 'pending') AND id != ?
-        AND DATE(startTime) = ?
-    `).get(existing.robotId, id, queryDay) as { cnt: number }
-
-    const scheduledTotal = getRobotDailyScheduledMinutes(db, existing.robotId, queryDay)
-    if (remaining.cnt === 0) {
-      db.prepare(`
-        UPDATE robots SET status = 'idle', dailyUsageMinutes = ?, updatedAt = datetime('now', 'localtime')
-        WHERE id = ?
-      `).run(scheduledTotal, existing.robotId)
-    } else {
-      db.prepare(`
-        UPDATE robots SET dailyUsageMinutes = ?, updatedAt = datetime('now', 'localtime')
-        WHERE id = ?
-      `).run(scheduledTotal, existing.robotId)
-    }
+    syncRobotDailyLoad(db, existing.robotId!, queryDay)
   }
 }
 
@@ -332,10 +324,9 @@ export function completeSchedule(db: Database.Database, id: number): Bill {
     db.prepare(`
       UPDATE robots
       SET totalUsageMinutes = totalUsageMinutes + ?,
-          dailyUsageMinutes = dailyUsageMinutes + ?,
           updatedAt = datetime('now', 'localtime')
       WHERE id = ?
-    `).run(actualDuration, actualDuration, existing.robotId)
+    `).run(actualDuration, existing.robotId)
 
     const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billResult.lastInsertRowid) as Bill
 
@@ -346,15 +337,8 @@ export function completeSchedule(db: Database.Database, id: number): Bill {
       bill.verifiedAt = dayjs().format('YYYY-MM-DD HH:mm:ss')
     }
 
-    const remaining = db.prepare(`
-      SELECT COUNT(*) as cnt FROM training_schedules
-      WHERE robotId = ? AND status IN ('allocated', 'in_progress', 'pending') AND id != ?
-    `).get(existing.robotId, id) as { cnt: number }
-    if (remaining.cnt === 0) {
-      db.prepare(`
-        UPDATE robots SET status = 'idle', updatedAt = datetime('now', 'localtime') WHERE id = ?
-      `).run(existing.robotId)
-    }
+    const queryDay = dayjs(existing.startTime).format('YYYY-MM-DD')
+    syncRobotDailyLoad(db, existing.robotId!, queryDay)
 
     return bill
   })

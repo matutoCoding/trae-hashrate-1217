@@ -63,11 +63,20 @@ export interface ScheduleQuery {
   patientName?: string
 }
 
+export interface AllocationDetail {
+  plannedMinutes: number
+  completedMinutes: number
+  totalLoadMinutes: number
+  fragmentationScore: number
+  totalScore: number
+}
+
 export interface AllocationResult {
   success: boolean
   robot?: Robot
   reason?: string
   alternatives?: Robot[]
+  detail?: AllocationDetail
 }
 
 export interface BillingRule {

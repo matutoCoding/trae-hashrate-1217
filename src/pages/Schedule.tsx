@@ -443,10 +443,34 @@ export default function SchedulePage() {
                 <div style={{ marginTop: 8 }}>
                   {allocationPreview.success && allocationPreview.robot && (
                     <div>
-                      <div><strong>最优分配：</strong>{allocationPreview.robot.name}</div>
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>
-                        型号：{allocationPreview.robot.model} · 位置：{allocationPreview.robot.location}
+                      <div style={{ marginBottom: 6 }}>
+                        <strong>最优分配：</strong>{allocationPreview.robot.name}
+                        <span style={{ marginLeft: 8, fontSize: 12, color: '#6b7280' }}>
+                          {allocationPreview.robot.model} · {allocationPreview.robot.location}
+                        </span>
                       </div>
+                      {allocationPreview.detail && (
+                        <div style={{
+                          padding: '10px 12px',
+                          background: '#f0fdf4',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          color: '#374151',
+                          lineHeight: 1.8,
+                        }}>
+                          <div>• 本次训练预计占用：<strong>{allocationPreview.detail.totalLoadMinutes > 0
+                            ? form.getFieldValue('durationMinutes')
+                            : form.getFieldValue('durationMinutes')} 分钟</strong></div>
+                          <div>• 当日已排未开始：{allocationPreview.detail.plannedMinutes} 分钟</div>
+                          <div>• 当日已完成实际：{allocationPreview.detail.completedMinutes} 分钟</div>
+                          <div>• 当日总负载（分配后）：<strong>{allocationPreview.detail.totalLoadMinutes + (form.getFieldValue('durationMinutes') || 0)} 分钟</strong></div>
+                          <div>• 时间碎片增量：{allocationPreview.detail.fragmentationScore} 分（越低越好）</div>
+                          <div style={{ marginTop: 4, paddingTop: 6, borderTop: '1px dashed #bbf7d0' }}>
+                            分配逻辑：优先级×100 − 碎片惩罚×2 − 当日负载×3，
+                            此台综合评分 <strong>{allocationPreview.detail.totalScore.toFixed(0)}</strong> 分最高
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   {!allocationPreview.success && (
